@@ -7,6 +7,7 @@ package libpod
 import (
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"sort"
 
@@ -22,6 +23,16 @@ import (
 	"github.com/containers/storage/pkg/lockfile"
 	"github.com/sirupsen/logrus"
 )
+
+// bindPorts ports to keep them open via conmon so no other process can use them and we can check if they are in use.
+// Note in all cases it is important that we bind before setting up the network to avoid issues were we add firewall
+// rules before we even "own" the port.
+func (c *Container) bindPorts() ([]*os.File, error) {
+	if !c.runtime.config.Engine.EnablePortReservation || rootless.IsRootless() || !c.config.NetMode.IsBridge() {
+		return nil, nil
+	}
+	return bindPorts(c.convertPortMappings())
+}
 
 // convertPortMappings will remove the HostIP part from the ports when running inside podman machine.
 // This is needed because a HostIP of 127.0.0.1 would now allow the gvproxy forwarder to reach to open ports.
@@ -234,7 +245,7 @@ func (c *Container) getContainerNetworkInfo() (*define.InspectNetworkSettings, e
 	}
 
 	settings := new(define.InspectNetworkSettings)
-	settings.Ports = makeInspectPorts(c.config.PortMappings, c.config.ExposedPorts)
+	settings.Ports = makeInspectPortBindings(c.config.PortMappings)
 
 	networks, err := c.networks()
 	if err != nil {

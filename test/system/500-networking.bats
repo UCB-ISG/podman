@@ -52,6 +52,15 @@ load helpers.network
             $IMAGE /bin/busybox-extras httpd -f -p 80
     cid=$output
 
+    # Try to bind the same port again, this must fail.
+    # regression test for https://issues.redhat.com/browse/RHEL-50746
+    # which caused this command to overwrite the firewall rules as root
+    # causing the curl commands below to fail
+    run_podman 126 run --rm -p "$HOST_PORT:80" $IMAGE true
+    # Note error messages differ between root/rootless, so only check port
+    # and the part of the error text that is common.
+    assert "$output" =~ "$HOST_PORT.*ddress already in use" "port in use"
+
     # In that container, create a second file, using exec and redirection
     run_podman exec -i myweb sh -c "cat > index2.txt" <<<"$random_2"
     # ...verify its contents as seen from container.
@@ -59,9 +68,9 @@ load helpers.network
     is "$output" "$random_2" "exec cat index2.txt"
 
     # Verify http contents: curl from localhost
-    run curl -s -S $SERVER/index.txt
+    run curl --max-time 3 -s -S $SERVER/index.txt
     is "$output" "$random_1" "curl 127.0.0.1:/index.txt"
-    run curl -s -S $SERVER/index2.txt
+    run curl --max-time 3 -s -S $SERVER/index2.txt
     is "$output" "$random_2" "curl 127.0.0.1:/index2.txt"
 
     # Verify http contents: wget from a second container
@@ -874,16 +883,14 @@ EOF
 # Test for https://github.com/containers/podman/issues/18615
 @test "podman network cleanup --userns + --restart" {
     skip_if_cgroupsv1 "run --uidmap fails on cgroups v1 (issue 15025, wontfix)"
-    userns="--userns=keep-id"
-    if ! is_rootless; then
-        userns="--uidmap=0:1111111:65536 --gidmap=0:1111111:65536"
-    fi
 
     local net1=a-$(random_string 10)
     # use /29 subnet to limt available ip space, a 29 gives 5 usable addresses (6 - 1 for the gw)
     local subnet="$(random_rfc1918_subnet).0/29"
     run_podman network create --subnet $subnet $net1
-    local cname=con-$(random_string 10)
+    local cname=con1-$(random_string 10)
+    local cname2=con2-$(random_string 10)
+    local cname3=
 
     local netns_count=
     if ! is_rootless; then
@@ -896,18 +903,31 @@ EOF
 
     # Previously this would fail as the container would run out of ips after 5 restarts.
     run_podman inspect --format "{{.RestartCount}}" $cname
-    assert "$output" == "6" "RestartCount for failing container"
+    assert "$output" == "6" "RestartCount for failing container with bridge network"
 
     # Now make sure we can still run a container with free ips.
     run_podman run --rm --network $net1 $IMAGE true
 
-    if ! is_rootless; then
+    # And now because of all the fun we have to check the same with slirp4netns and pasta because
+    # that uses slightly different code paths. Note this would deadlock before the fix.
+    # https://github.com/containers/podman/issues/21477
+    run_podman 1 run --name $cname2 --network slirp4netns --restart on-failure:2 --userns keep-id $IMAGE false
+    run_podman inspect --format "{{.RestartCount}}" $cname2
+    assert "$output" == "2" "RestartCount for failing container with slirp4netns"
+
+    if is_rootless; then
+        # pasta can only run rootless
+        cname3=con3-$(random_string 10)
+        run_podman 1 run --name $cname3 --network pasta --restart on-failure:2 --userns keep-id $IMAGE false
+        run_podman inspect --format "{{.RestartCount}}" $cname3
+        assert "$output" == "2" "RestartCount for failing container with pasta"
+    else
         # This is racy if other programs modify /run/netns while the test is running.
         # However I think the risk is minimal and I think checking for this is important.
         assert "$(ls /run/netns | wc -l)" == "$netns_count" "/run/netns has no leaked netns files"
     fi
 
-    run_podman rm -f -t0 $cname
+    run_podman rm -f -t0 $cname $cname2 $cname3
     run_podman network rm $net1
 }
 
