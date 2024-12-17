@@ -1381,12 +1381,13 @@ func (s *store) canUseShifting(uidmap, gidmap []idtools.IDMap) bool {
 	if !s.graphDriver.SupportsShifting() {
 		return false
 	}
-	if uidmap != nil && !idtools.IsContiguous(uidmap) {
-		return false
-	}
-	if gidmap != nil && !idtools.IsContiguous(gidmap) {
-		return false
-	}
+	// XXX: deal with problems from non-contiguous maps elsewhere
+	//if uidmap != nil && !idtools.IsContiguous(uidmap) {
+	//	return false
+	//}
+	//if gidmap != nil && !idtools.IsContiguous(gidmap) {
+	//	return false
+	//}
 	return true
 }
 
