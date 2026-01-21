@@ -367,7 +367,8 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 				if err := c.relabel(m.Source, c.MountLabel(), label.IsShared(o)); err != nil {
 					return nil, nil, err
 				}
-
+			case "copy", "nocopy":
+				// no real OCI runtime bind mount options, these should already be handled by the named volume mount above
 			default:
 				options = append(options, o)
 			}
@@ -2916,7 +2917,7 @@ func (c *Container) relabel(src, mountLabel string, shared bool) error {
 	}
 	// only relabel on initial creation of container
 	if !c.ensureState(define.ContainerStateConfigured, define.ContainerStateUnknown) {
-		label, err := label.FileLabel(src)
+		label, err := selinux.FileLabel(src)
 		if err != nil {
 			return err
 		}
