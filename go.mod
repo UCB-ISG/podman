@@ -19,7 +19,7 @@ require (
 	github.com/containers/libhvee v0.5.0
 	github.com/containers/ocicrypt v1.1.10
 	github.com/containers/psgo v1.8.0
-	github.com/containers/storage v1.51.2
+	github.com/containers/storage v1.51.3
 	github.com/coreos/go-systemd/v22 v22.5.1-0.20231103132048-7d375ecc2b09
 	github.com/coreos/stream-metadata-go v0.4.4
 	github.com/crc-org/vfkit v0.1.2-0.20231030102423-f3c783d34420
@@ -113,7 +113,7 @@ require (
 	github.com/gabriel-vasile/mimetype v1.4.2 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/gin-gonic/gin v1.9.1 // indirect
-	github.com/go-jose/go-jose/v3 v3.0.3 // indirect
+	github.com/go-jose/go-jose/v3 v3.0.5 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
